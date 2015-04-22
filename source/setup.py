@@ -5,7 +5,7 @@
 from setuptools import setup
 
 # acceptable version schema: major.minor[.patch][sub]
-__version__ = '0.1.2'
+__version__ = '0.2.1'
 __pkg__ = 'status_report'
 __pkgdir__ = {'status_report': 'status_report'}
 __pkgs__ = [
@@ -14,14 +14,16 @@ __pkgs__ = [
 ]
 __provides__ = ['status_report']
 __desc__ = 'Status Report - Comfortable CLI Activity Status Reporting'
-__scripts__ = ['status-report']
+__scripts__ = ['status-report', 'snippet']
 __requires__ = [
     'python_dateutil',
     'kerberos',
+    'sqlalchemy',
 ]
 __irequires__ = [
     'python_dateutil',
     'kerberos',
+    'sqlalchemy',
 ]
 pip_src = 'https://pypi.python.org/packages/source'
 __deplinks__ = []

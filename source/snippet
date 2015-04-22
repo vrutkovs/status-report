@@ -1,0 +1,305 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
+#   snippet - Save status snippets
+#   Author: Chris Ward <cward@redhat.com>
+#
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
+#   Copyright (c) 2012 Red Hat, Inc. All rights reserved.
+#
+#   This copyrighted material is made available to anyone wishing
+#   to use, modify, copy, or redistribute it subject to the terms
+#   and conditions of the GNU General Public License version 2.
+#
+#   This program is distributed in the hope that it will be
+#   useful, but WITHOUT ANY WARRANTY; without even the implied
+#   warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+#   PURPOSE. See the GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public
+#   License along with this program; if not, write to the Free
+#   Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+#   Boston, MA 02110-1301, USA.
+#
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+"""
+Comfortably save your status snippets (e.g. task or activity)
+completed on a given date.
+"""
+
+from __future__ import unicode_literals, absolute_import
+
+import ConfigParser
+from dateutil.parser import parse as dt_parse
+from getpass import getuser
+import optparse
+import re
+import sys
+
+import sqlalchemy as sqla
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
+
+from status_report.base import Date
+from status_report.utils import Config, ConfigError, CONFIG
+from status_report.utils import Logging, info, pretty
+
+# Create the output logger
+logging = Logging('status-report')
+log = logging.logger
+
+USER_DEFAULT = getuser()
+
+TODAY = str(Date("today"))
+snippet_re = re.compile('^(\d\d\d\d-\d\d-\d\d)?(.*)')
+
+SUPPORTED_BACKENDS = ['log', 'sqlite']
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#  Options
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+class Options(object):
+    """ Command line options parser """
+    def __init__(self):
+        """ Prepare the parser. """
+        self.config = Config()
+        self.parser = optparse.OptionParser(
+            usage="./snippet YYYY-MM-DD snippet description",
+            description=__doc__.strip())
+
+        # Snippets Backend Config
+        group = optparse.OptionGroup(self.parser, "Storage")
+        group.add_option(
+            "-b",
+            "--backend",
+            type="choice",
+            choices=SUPPORTED_BACKENDS,
+            help="Override the Snippets storage backend")
+        group.add_option(
+            "-u",
+            "--uri",
+            help="Override the Snippets storage backend uri (path)")
+        self.parser.add_option_group(group)
+
+        # Display / Debug options
+        group = optparse.OptionGroup(self.parser, "Display / Debug")
+        group.add_option(
+            "--debug", "-d",
+            action="store_true",
+            help="Turn on debugging output, do not catch exceptions")
+        self.parser.add_option_group(group)
+
+    def parse(self):
+        """ Parse the options. """
+        (opt, args) = self.parser.parse_args()
+
+        # Enable debugging output
+        if opt.debug:
+            logging.set(level=2)
+
+        try:
+            conf = dict(self.config.parser.items('snippets'))
+        except ConfigParser.NoSectionError:
+            log.error("No snippets section in ~/.status-report config file")
+            info("Create at least a minimum config file {0}:".format(CONFIG))
+            info("[snippets]\nuri = /tmp/snippets.log")
+            sys.exit(3)
+
+        # use config defined values
+        # default backend is simple text log file
+        opt.backend = opt.backend or conf.get('backend', 'log')
+        if not opt.backend in SUPPORTED_BACKENDS:
+            raise ConfigError("Invalid backend: {}".format(opt.backend))
+
+        # use config defined values if arg not set
+        opt.uri = opt.uri or conf.get('uri')
+
+        if args:
+            # merge everything into a single string
+            args = ' '.join(args).strip()
+            args = [args]
+        else:
+            args = []
+            info("Add your snippet(s), then CTRL-D:")
+            while True:
+                try:
+                    input_str = raw_input(">").strip()
+                except (EOFError, KeyboardInterrupt):
+                    break
+                else:
+                    # ignore empty lines
+                    if input_str:
+                        args.append(input_str)
+
+        # Finito
+        log.debug("Gathered options:")
+        log.debug(pretty(opt))
+        log.debug("{0} snippet(s) gathered".format(len(args)))
+        log.debug(args)
+        return opt, args
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#  Snippets Store
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+class Snippets(object):
+    backend = None
+    uri = None
+
+    def __init__(self, snippets, options=None):
+        self.options = options
+        self.snippets = list(snippets or [])
+        self._clean()
+
+        self.backend = self.options.backend
+        self.uri = self.options.uri
+
+    def __len__(self):
+        return len(self.snippets)
+
+    def __getitem__(self, i):
+        return self.snippets[i]
+
+    def _clean(self):
+        ''' Clean up snippets for saving '''
+        _snippets = []
+        for v in self.snippets:
+            on, text = None, None
+            # simplify spacing
+            v = re.sub('\s+', ' ', v)
+            # search for a date override in the beginning of each snippet
+            # otherwise default to completion date of 'today'
+            search = snippet_re.search(v)
+            if search:
+                on = search.group(1)
+                text = search.group(2)
+            if not text:
+                continue  # skip empty snippets
+            if not on:
+                on = TODAY  # default to TODAY if no on_date is set in-line
+            # Make sure each snippest has an on_date
+            snippet = '{0} {1}'.format(on.strip(), text.strip())
+            _snippets.append(snippet)
+        self.snippets = _snippets
+
+    def __str__(self):
+        return str('\n'.join(self.snippets))
+
+    def __delitem__(self, i):
+        raise NotImplemented("OOps! Can not remove Snippets!")
+
+    def insert(self, i, v):
+        raise NotImplemented("OOps! Can not insert Snippets!")
+
+    def write(self, *args, **kwargs):
+        k = len(self.snippets)
+        log.debug('Writing {0} snippets to {1}'.format(k, self.uri))
+
+    def iter_tuples(self):
+        for s in self.snippets:
+            search = snippet_re.search(s)
+            if search:
+                on_date = search.group(1)
+                text = search.group(2)
+            yield on_date, text
+
+    def ls(self):
+        raise NotImplementedError("Must be defined by sub-class")
+
+
+class SnippetsLog(Snippets):
+    def __init__(self, snippets, options):
+        super(SnippetsLog, self).__init__(snippets, options)
+        # default store is in CWD
+        self.uri = self.uri or 'snippets.log'
+
+    def write(self):
+        super(SnippetsLog, self).write()
+        with open(self.uri, 'a') as f:
+            f.write(str(self) + '\n')
+
+    def ls(self):
+        with open(self.uri) as f:
+            info('\n'.join(f.readlines()))
+
+
+class Snippet(Base):
+    __tablename__ = 'snippets'
+
+    id = sqla.Column(sqla.Integer, primary_key=True)
+    on_date = sqla.Column(sqla.Date)
+    text = sqla.Column(sqla.String(140, convert_unicode=True))
+
+    def __repr__(self):
+        return "<Snippet(on_date='{0}', text='{1}')>".format(
+            self.on_date, self.text)
+
+
+class SnippetsSQLite(Snippets):
+    driver = 'sqlite:///'
+
+    def __init__(self, snippets, options):
+        super(SnippetsSQLite, self).__init__(snippets, options)
+        self.uri = self.uri or '{}snippets.db'.format(self.driver)
+        echo = bool(options.debug)
+        self.engine = sqla.create_engine(self.uri, echo=echo)
+        self.Session = sqla.orm.sessionmaker(bind=self.engine)
+
+    def write(self):
+        super(SnippetsSQLite, self).write()
+        session = self.Session()
+
+        # Make sure the table is available
+        Base.metadata.create_all(self.engine)
+
+        for on_date, text in self.iter_tuples():
+            print on_date, text, '*'*10
+            on_date = dt_parse(on_date)
+            s = Snippet(on_date=on_date, text=text)
+            session.add(s)
+        else:
+            session.commit()
+
+    def ls(self, limit=1):
+        session = self.Session()
+        q = session.query(Snippet)  # query for all snippets
+        q = q.order_by(sqla.desc(Snippet.id))  # order in reverse
+        q = q.limit(limit)  # grab the most recent X LIMIT
+        for snippet in sorted(q, reverse=True):
+            # reorder the results top down (oldest-newest)
+            info('{0} {1}'.format(snippet.on_date, snippet.text))
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#  Main
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+if __name__ == "__main__":
+    try:
+        # Parse options
+        opts, snippets = Options().parse()
+        if not snippets:
+            log.warn("No Snippets Added")
+            sys.exit(0)
+    except ConfigParser.NoSectionError:
+        log.error("No user provided on the command line or in the config file")
+        info("Create at least a minimum config file {0}:".format(CONFIG))
+        info("[general]\nemail = {}@domain.com".format(USER_DEFAULT))
+        sys.exit(3)
+
+    if opts.backend == 'log':
+        SnippetsCls = SnippetsLog
+    elif opts.backend == 'sqlite':
+        SnippetsCls = SnippetsSQLite
+    else:
+        raise RuntimeError("Unknown snippets backend: {}".format(opts.backend))
+
+    snippets = SnippetsCls(snippets, opts)
+    snippets.write()
+    snippets.ls(10)
