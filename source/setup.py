@@ -32,9 +32,9 @@ __provides__ = ['status_report']
 __desc__ = 'Status Report - Comfortable CLI Activity Status Reporting'
 __scripts__ = ['status-report', 'snippet']
 __irequires__ = [
-    'python_dateutil=2.4.2',
-    'kerberos=1.2.2',
-    'sqlalchemy=1.0.0',
+    'python_dateutil==2.4.2',
+    'kerberos==1.2.2',
+    'sqlalchemy==1.0.0',
 ]
 pip_src = 'https://pypi.python.org/packages/source'
 __deplinks__ = []
