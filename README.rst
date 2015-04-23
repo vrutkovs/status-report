@@ -3,6 +3,24 @@
     status-report
 ======================
 
+.. image:: https://badge.fury.io/py/status-report.svg
+    :target: http://badge.fury.io/py/status-report
+
+.. image:: https://travis-ci.org/psss/status-report.svg?branch=master
+    :target: https://travis-ci.org/psss/status-report
+
+.. image:: https://coveralls.io/repos/psss/status-report/badge.svg 
+    :target: https://coveralls.io/r/psss/status-report
+
+.. image:: https://pypip.in/download/status_report/badge.svg
+    :target: https://pypi.python.org/pypi/status_report/
+
+.. image:: https://pypip.in/license/status_report/badge.svg
+    :target: https://pypi.python.org/pypi/status_report/
+    :alt: License
+ 
+
+
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     Generate status report stats for selected date range
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -38,7 +56,7 @@ The config file ~/.status-report is used to store both general
 settings and configuration of individual reports::
 
     [general]
-    email = "Petr Splichal" <psss@redhat.com>
+    email = "Petr Šplíchal" <psplicha@redhat.com>
     width = 79
 
     [header]
@@ -79,6 +97,35 @@ RUN TESTS (pytest)
 pip install pytest
 py.test source/tests
 
+INSTALLATION
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Install directly from Fedora/Copr repository or use PIP::
+
+    # Basic dependencies for buiding/installing pip packages
+    sudo yum install gcc krb5-devel
+    sudo yum install python-devel python-pip python-virtualenv
+
+    # Upgrade to the latest pip/setup/virtualenv installer code
+    sudo pip install -U pip setuptools virtualenv
+
+    # Install into a python virtual environment (OPTIONAL)
+    virtualenv --no-site-packages ~/virtenv_statusreport
+    source ~/virtenv_statusreport/bin/activate
+
+    # Install status_report (sudo required if not in a virtualenv)
+    pip install status_report
+
+
+TESTS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+To run tests using pytest::
+
+    # sudo required if not in a virtualenv
+    pip install pytest coveralls
+    coverage run --source=status_report -m py.test source/tests
+    coverage report
+
+
 LINKS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Project page:
@@ -101,6 +148,7 @@ https://github.com/psss/status-report
 
 PIP repo:
 https://pypi.python.org/pypi/status_report/
+
 
 AUTHORS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
